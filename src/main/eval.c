@@ -34,10 +34,12 @@
 
 static SEXP bcEval(SEXP, SEXP);
 static void bcEval_init(void);
+static void dobcprof();
 
 /* BC_PROFILING needs to be enabled at build time. It is not enabled
    by default as enabling it disables the more efficient threaded code
    implementation of the byte code interpreter. */
+#define BC_PROFILING 
 #ifdef BC_PROFILING
 static Rboolean bc_profiling = FALSE;
 #endif
@@ -5617,7 +5619,7 @@ typedef int BCODE;
 #define OP(name,argc) case name##_OP
 
 #ifdef BC_PROFILING
-#define BEGIN_MACHINE  loop: currentpc = pc; current_opcode = *pc; switch(*pc++)
+#define BEGIN_MACHINE  loop: currentpc = pc; current_opcode = *pc; dobcprof(); switch(*pc++)
 #else
 #define BEGIN_MACHINE  loop: currentpc = pc; switch(*pc++)
 #endif
@@ -9251,19 +9253,15 @@ SEXP do_bcprofcounts(SEXP call, SEXP op, SEXP args, SEXP env)
     return val;
 }
 
-static void dobcprof(int sig)
+static void dobcprof()
 {
     if (current_opcode >= 0 && current_opcode < OPCOUNT)
 	opcode_counts[current_opcode]++;
-    signal(SIGPROF, dobcprof);
 }
 
 attribute_hidden
-SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env)
-{
-    struct itimerval itv;
-    int interval;
-    double dinterval = 0.02;
+SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
+
     int i;
 
     checkArity(op, args);
@@ -9272,25 +9270,11 @@ SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env)
     if (bc_profiling)
 	error(_("already byte code profiling"));
 
-    /* according to man setitimer, it waits until the next clock
-       tick, usually 10ms, so avoid too small intervals here */
-    interval = 1e6 * dinterval + 0.5;
 
     /* initialize the profile data */
     current_opcode = NO_CURRENT_OPCODE;
     for (i = 0; i < OPCOUNT; i++)
 	opcode_counts[i] = 0;
-
-    signal(SIGPROF, dobcprof);
-
-    itv.it_interval.tv_sec = interval / 1000000;
-    itv.it_interval.tv_usec =
-	(suseconds_t) (interval - itv.it_interval.tv_sec * 1000000);
-    itv.it_value.tv_sec = interval / 1000000;
-    itv.it_value.tv_usec =
-	(suseconds_t) (interval - itv.it_value.tv_sec * 1000000);
-    if (setitimer(ITIMER_PROF, &itv, NULL) == -1)
-	error(_("setting profile timer failed"));
 
     bc_profiling = TRUE;
 
@@ -9305,18 +9289,9 @@ static void dobcprof_null(int sig)
 attribute_hidden
 SEXP do_bcprofstop(SEXP call, SEXP op, SEXP args, SEXP env)
 {
-    struct itimerval itv;
-
     checkArity(op, args);
     if (! bc_profiling)
 	error(_("not byte code profiling"));
-
-    itv.it_interval.tv_sec = 0;
-    itv.it_interval.tv_usec = 0;
-    itv.it_value.tv_sec = 0;
-    itv.it_value.tv_usec = 0;
-    setitimer(ITIMER_PROF, &itv, NULL);
-    signal(SIGPROF, dobcprof_null);
 
     bc_profiling = FALSE;
 
