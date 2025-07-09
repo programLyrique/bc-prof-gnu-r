@@ -34,14 +34,15 @@
 
 static SEXP bcEval(SEXP, SEXP);
 static void bcEval_init(void);
-static void dobcprof();
 
 /* BC_PROFILING needs to be enabled at build time. It is not enabled
    by default as enabling it disables the more efficient threaded code
    implementation of the byte code interpreter. */
-#define BC_PROFILING 
+#define BC_PROFILING // On here!
 #ifdef BC_PROFILING
 static Rboolean bc_profiling = FALSE;
+static void dobcprof();
+static void count_opcodes(SEXP bc);
 #endif
 
 static int R_Profiling = 0;
@@ -5619,7 +5620,7 @@ typedef int BCODE;
 #define OP(name,argc) case name##_OP
 
 #ifdef BC_PROFILING
-#define BEGIN_MACHINE  loop: currentpc = pc; current_opcode = *pc; dobcprof(); switch(*pc++)
+#define BEGIN_MACHINE  loop: currentpc = pc; current_opcode = *pc; if(bc_profiling) dobcprof(); switch(*pc++)
 #else
 #define BEGIN_MACHINE  loop: currentpc = pc; switch(*pc++)
 #endif
@@ -6224,6 +6225,8 @@ static int tryAssignDispatch(char *generic, SEXP call, SEXP lhs, SEXP rhs,
 #define NO_CURRENT_OPCODE -1
 static int current_opcode = NO_CURRENT_OPCODE;
 static int opcode_counts[OPCOUNT];
+static int nb_opcodes = 0; // number of opcodes statically (i.e. in the BCODESXP)
+static SEXP seen_bc = NULL;
 #endif
 
 static void bc_check_sigint(void)
@@ -7490,6 +7493,11 @@ static SEXP bcEval(SEXP body, SEXP rho)
   /* check version and allow bytecode to be disabled for testing */
   if (R_disable_bytecode || ! R_BCVersionOK(body))
       return eval(bytecodeExpr(body), rho);
+
+#ifdef BC_PROFILING
+	if (bc_profiling)
+  		count_opcodes(body);
+#endif
 
   struct bcEval_globals globals;
   save_bcEval_globals(&globals);
@@ -9259,6 +9267,165 @@ static void dobcprof()
 	opcode_counts[current_opcode]++;
 }
 
+static const size_t opcodeArgCount[] = {
+    0, // BCMISMATCH_OP
+    0, // RETURN_OP
+    1, // GOTO_OP
+    2, // BRIFNOT_OP
+    0, // POP_OP
+    0, // DUP_OP
+    0, // PRINTVALUE_OP
+    2, // STARTLOOPCNTXT_OP
+    1, // ENDLOOPCNTXT_OP
+    0, // DOLOOPNEXT_OP
+    0, // DOLOOPBREAK_OP
+    3, // STARTFOR_OP
+    1, // STEPFOR_OP
+    0, // ENDFOR_OP
+    0, // SETLOOPVAL_OP
+    0, // INVISIBLE_OP
+    1, // LDCONST_OP
+    0, // LDNULL_OP
+    0, // LDTRUE_OP
+    0, // LDFALSE_OP
+    1, // GETVAR_OP
+    1, // DDVAL_OP
+    1, // SETVAR_OP
+    1, // GETFUN_OP
+    1, // GETGLOBFUN_OP
+    1, // GETSYMFUN_OP
+    1, // GETBUILTIN_OP
+    1, // GETINTLBUILTIN_OP
+    0, // CHECKFUN_OP
+    1, // MAKEPROM_OP
+    0, // DOMISSING_OP
+    1, // SETTAG_OP
+    0, // DODOTS_OP
+    0, // PUSHARG_OP
+    1, // PUSHCONSTARG_OP
+    0, // PUSHNULLARG_OP
+    0, // PUSHTRUEARG_OP
+    0, // PUSHFALSEARG_OP
+    1, // CALL_OP
+    1, // CALLBUILTIN_OP
+    1, // CALLSPECIAL_OP
+    1, // MAKECLOSURE_OP
+    1, // UMINUS_OP
+    1, // UPLUS_OP
+    1, // ADD_OP
+    1, // SUB_OP
+    1, // MUL_OP
+    1, // DIV_OP
+    1, // EXPT_OP
+    1, // SQRT_OP
+    1, // EXP_OP
+    1, // EQ_OP
+    1, // NE_OP
+    1, // LT_OP
+    1, // LE_OP
+    1, // GE_OP
+    1, // GT_OP
+    1, // AND_OP
+    1, // OR_OP
+    1, // NOT_OP
+    0, // DOTSERR_OP
+    1, // STARTASSIGN_OP
+    1, // ENDASSIGN_OP
+    2, // STARTSUBSET_OP
+    0, // DFLTSUBSET_OP
+    2, // STARTSUBASSIGN_OP
+    0, // DFLTSUBASSIGN_OP
+    2, // STARTC_OP
+    0, // DFLTC_OP
+    2, // STARTSUBSET2_OP
+    0, // DFLTSUBSET2_OP
+    2, // STARTSUBASSIGN2_OP
+    0, // DFLTSUBASSIGN2_OP
+    2, // DOLLAR_OP
+    2, // DOLLARGETS_OP
+    0, // ISNULL_OP
+    0, // ISLOGICAL_OP
+    0, // ISINTEGER_OP
+    0, // ISDOUBLE_OP
+    0, // ISCOMPLEX_OP
+    0, // ISCHARACTER_OP
+    0, // ISSYMBOL_OP
+    0, // ISOBJECT_OP
+    0, // ISNUMERIC_OP
+    1, // VECSUBSET_OP
+    1, // MATSUBSET_OP
+    1, // VECSUBASSIGN_OP
+    1, // MATSUBASSIGN_OP
+    2, // AND1ST_OP
+    1, // AND2ND_OP
+    2, // OR1ST_OP
+    1, // OR2ND_OP
+    1, // GETVAR_MISSOK_OP
+    1, // DDVAL_MISSOK_OP
+    0, // VISIBLE_OP
+    1, // SETVAR2_OP
+    1, // STARTASSIGN2_OP
+    1, // ENDASSIGN2_OP
+    2, // SETTER_CALL_OP
+    1, // GETTER_CALL_OP
+    0, // SWAP_OP
+    0, // DUP2ND_OP
+    4, // SWITCH_OP
+    0, // RETURNJMP_OP
+    2, // STARTSUBSET_N_OP
+    2, // STARTSUBASSIGN_N_OP
+    1, // VECSUBSET2_OP
+    1, // MATSUBSET2_OP
+    1, // VECSUBASSIGN2_OP
+    1, // MATSUBASSIGN2_OP
+    2, // STARTSUBSET2_N_OP
+    2, // STARTSUBASSIGN2_N_OP
+    2, // SUBSET_N_OP
+    2, // SUBSET2_N_OP
+    2, // SUBASSIGN_N_OP
+    2, // SUBASSIGN2_N_OP
+    1, // LOG_OP
+    1, // LOGBASE_OP
+    2, // MATH1_OP
+    2, // DOTCALL_OP
+    1, // COLON_OP
+    1, // SEQALONG_OP
+    1, // SEQLEN_OP
+    2, // BASEGUARD_OP
+    0, // INCLNK_OP
+    0, // DECLNK_OP
+    1, // DECLNK_N_OP
+    0, // INCLNKSTK_OP
+    0  // DECLNKSTK_OP
+};
+
+static void count_opcodes(SEXP bc) {
+	if(!RTRACE(bc)) {
+		Rprintf("Counting opcodes in  new byte code object %p\n", (void *)bc);
+		if (BCODE_EXPR(bc) != R_NilValue)
+			Rf_PrintValue(BCODE_EXPR(bc));
+		
+		int* opcodes = BCCODE(bc);
+
+		// 1st element is the version so we skip it
+
+  		for(int i = 1 ; i < LENGTH(BCODE_CODE(bc)); i++) {
+			i += opcodeArgCount[opcodes[i]];
+			nb_opcodes++;
+		}
+
+		if(!seen_bc) {
+			seen_bc = list1(bc);
+			R_PreserveObject(seen_bc);
+		}
+		else {
+			seen_bc = CONS(bc, seen_bc);
+		}
+
+		SET_RTRACE(bc, TRUE);
+	}
+}
+
 attribute_hidden
 SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
 
@@ -9274,7 +9441,10 @@ SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
     /* initialize the profile data */
     current_opcode = NO_CURRENT_OPCODE;
     for (i = 0; i < OPCOUNT; i++)
-	opcode_counts[i] = 0;
+		opcode_counts[i] = 0;
+
+	nb_opcodes = 0;
+
 
     bc_profiling = TRUE;
 
@@ -9287,11 +9457,28 @@ static void dobcprof_null(int sig)
 }
 
 attribute_hidden
+SEXP do_count_opcodes(SEXP call, SEXP op, SEXP args, SEXP env) {
+	checkArity(op, args);
+	return ScalarInteger(nb_opcodes);
+}
+
+attribute_hidden
 SEXP do_bcprofstop(SEXP call, SEXP op, SEXP args, SEXP env)
 {
     checkArity(op, args);
     if (! bc_profiling)
 	error(_("not byte code profiling"));
+
+	if(seen_bc) {
+		// iterate to remove the tracing bit 
+		for(SEXP p = seen_bc; p != R_NilValue; p = CDR(p)) {
+			SEXP bc = CAR(p);
+			SET_RTRACE(bc, FALSE);
+		}
+		// release
+		R_ReleaseObject(seen_bc);
+		seen_bc = NULL;
+	}
 
     bc_profiling = FALSE;
 
@@ -9308,6 +9495,13 @@ SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
     checkArity(op, args);
     error(_("byte code profiling is not supported in this build"));
 }
+
+NORET attribute_hidden
+SEXP do_count_opcodes(SEXP call, SEXP op, SEXP args, SEXP env) {
+	checkArity(op, args);
+	error(_("byte code profiling is not supported in this build"));
+}
+
 NORET attribute_hidden
 SEXP do_bcprofstop(SEXP call, SEXP op, SEXP args, SEXP env) {
     checkArity(op, args);

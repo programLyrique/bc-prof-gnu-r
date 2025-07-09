@@ -79,6 +79,7 @@ SEXP do_baseenv(SEXP, SEXP, SEXP, SEXP);
 SEXP do_basename(SEXP, SEXP, SEXP, SEXP);
 SEXP do_bcprofcounts(SEXP, SEXP, SEXP, SEXP);
 SEXP do_bcprofstart(SEXP, SEXP, SEXP, SEXP);
+SEXP do_count_opcodes(SEXP, SEXP, SEXP, SEXP);
 SEXP do_bcprofstop(SEXP, SEXP, SEXP, SEXP);
 SEXP do_begin(SEXP, SEXP, SEXP, SEXP);
 SEXP do_bincode(SEXP, SEXP, SEXP, SEXP);

@@ -3267,6 +3267,8 @@ bcprof <- function(expr) {
                      names = Opcodes.names)
     hits <- sort(val[val > 0], decreasing = TRUE)
     pct <- round(100 * hits / sum(hits), 1)
+    cat("Nb static opcodes:", .Internal(count_opcodes()), "\n")
+    cat("Nb dynamic opcodes:", sum(val), "\n")
     data.frame(hits = hits, pct = pct)
 }
 

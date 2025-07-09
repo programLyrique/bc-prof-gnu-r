@@ -1005,6 +1005,7 @@ FUNTAB R_FunTab[] =
 
 {"bcprofcounts",do_bcprofcounts,0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 {"bcprofstart",	do_bcprofstart,	0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
+{"count_opcodes", do_count_opcodes, 0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 {"bcprofstop",	do_bcprofstop,	0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 
 {"eSoftVersion",do_eSoftVersion, 0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
