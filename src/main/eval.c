@@ -6226,6 +6226,7 @@ static int tryAssignDispatch(char *generic, SEXP call, SEXP lhs, SEXP rhs,
 static int current_opcode = NO_CURRENT_OPCODE;
 static int opcode_counts[OPCOUNT];
 static int nb_opcodes = 0; // number of opcodes statically (i.e. in the BCODESXP)
+static bool bc_prof_verbose = FALSE;
 static SEXP seen_bc = NULL;
 #endif
 
@@ -9399,20 +9400,158 @@ static const size_t opcodeArgCount[] = {
     0  // DECLNKSTK_OP
 };
 
+const char *opcodeNames[] = {
+    "BCMISMATCH",
+    "RETURN",
+    "GOTO",
+    "BRIFNOT",
+    "POP",
+    "DUP",
+    "PRINTVALUE",
+    "STARTLOOPCNTXT",
+    "ENDLOOPCNTXT",
+    "DOLOOPNEXT",
+    "DOLOOPBREAK",
+    "STARTFOR",
+    "STEPFOR",
+    "ENDFOR",
+    "SETLOOPVAL",
+    "INVISIBLE",
+    "LDCONST",
+    "LDNULL",
+    "LDTRUE",
+    "LDFALSE",
+    "GETVAR",
+    "DDVAL",
+    "SETVAR",
+    "GETFUN",
+    "GETGLOBFUN",
+    "GETSYMFUN",
+    "GETBUILTIN",
+    "GETINTLBUILTIN",
+    "CHECKFUN",
+    "MAKEPROM",
+    "DOMISSING",
+    "SETTAG",
+    "DODOTS",
+    "PUSHARG",
+    "PUSHCONSTARG",
+    "PUSHNULLARG",
+    "PUSHTRUEARG",
+    "PUSHFALSEARG",
+    "CALL",
+    "CALLBUILTIN",
+    "CALLSPECIAL",
+    "MAKECLOSURE",
+    "UMINUS",
+    "UPLUS",
+    "ADD",
+    "SUB",
+    "MUL",
+    "DIV",
+    "EXPT",
+    "SQRT",
+    "EXP",
+    "EQ",
+    "NE",
+    "LT",
+    "LE",
+    "GE",
+    "GT",
+    "AND",
+    "OR",
+    "NOT",
+    "DOTSERR",
+    "STARTASSIGN",
+    "ENDASSIGN",
+    "STARTSUBSET",
+    "DFLTSUBSET",
+    "STARTSUBASSIGN",
+    "DFLTSUBASSIGN",
+    "STARTC",
+    "DFLTC",
+    "STARTSUBSET2",
+    "DFLTSUBSET2",
+    "STARTSUBASSIGN2",
+    "DFLTSUBASSIGN2",
+    "DOLLAR",
+    "DOLLARGETS",
+    "ISNULL",
+    "ISLOGICAL",
+    "ISINTEGER",
+    "ISDOUBLE",
+    "ISCOMPLEX",
+    "ISCHARACTER",
+    "ISSYMBOL",
+    "ISOBJECT",
+    "ISNUMERIC",
+    "VECSUBSET",
+    "MATSUBSET",
+    "VECSUBASSIGN",
+    "MATSUBASSIGN",
+    "AND1ST",
+    "AND2ND",
+    "OR1ST",
+    "OR2ND",
+    "GETVAR_MISSOK",
+    "DDVAL_MISSOK",
+    "VISIBLE",
+    "SETVAR2",
+    "STARTASSIGN2",
+    "ENDASSIGN2",
+    "SETTER_CALL",
+    "GETTER_CALL",
+    "SWAP",
+    "DUP2ND",
+    "SWITCH",
+    "RETURNJMP",
+    "STARTSUBSET_N",
+    "STARTSUBASSIGN_N",
+    "VECSUBSET2",
+    "MATSUBSET2",
+    "VECSUBASSIGN2",
+    "MATSUBASSIGN2",
+    "STARTSUBSET2_N",
+    "STARTSUBASSIGN2_N",
+    "SUBSET_N",
+    "SUBSET2_N",
+    "SUBASSIGN_N",
+    "SUBASSIGN2_N",
+    "LOG",
+    "LOGBASE",
+    "MATH1",
+    "DOTCALL",
+    "COLON",
+    "SEQALONG",
+    "SEQLEN",
+    "BASEGUARD",
+    "INCLNK",
+    "DECLNK",
+    "DECLNK_N",
+    "INCLNKSTK",
+    "DECLNKSTK"
+};
+
 static void count_opcodes(SEXP bc) {
 	if(!RTRACE(bc)) {
-		Rprintf("Counting opcodes in  new byte code object %p\n", (void *)bc);
-		if (BCODE_EXPR(bc) != R_NilValue)
-			Rf_PrintValue(BCODE_EXPR(bc));
+		if(bc_prof_verbose) {
+			Rprintf("Counting opcodes in  new byte code object %p\n", (void *)bc);
+			if (BCODE_EXPR(bc) != R_NilValue)
+				Rf_PrintValue(BCODE_EXPR(bc));
+		}
 		
 		int* opcodes = BCCODE(bc);
 
 		// 1st element is the version so we skip it
-
+		int local_nb_opcodes = 0;
   		for(int i = 1 ; i < LENGTH(BCODE_CODE(bc)); i++) {
+			if(bc_prof_verbose) Rprintf("%s[%d], ", opcodeNames[opcodes[i]], opcodeArgCount[opcodes[i]]);
 			i += opcodeArgCount[opcodes[i]];
+			local_nb_opcodes++;
 			nb_opcodes++;
 		}
+
+		if(bc_prof_verbose) Rprintf("\nLocal number of opcodes: %d\n", local_nb_opcodes);
 
 		if(!seen_bc) {
 			seen_bc = list1(bc);
@@ -9432,6 +9571,7 @@ SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
     int i;
 
     checkArity(op, args);
+	bc_prof_verbose = asBool(CAR(args));
     if (R_Profiling)
 	error(_("profile timer in use"));
     if (bc_profiling)
@@ -9445,6 +9585,9 @@ SEXP do_bcprofstart(SEXP call, SEXP op, SEXP args, SEXP env) {
 
 	nb_opcodes = 0;
 
+	if(bc_prof_verbose) {
+		Rprintf("Starting byte code profiling\n");
+	}
 
     bc_profiling = TRUE;
 
@@ -9481,6 +9624,7 @@ SEXP do_bcprofstop(SEXP call, SEXP op, SEXP args, SEXP env)
 	}
 
     bc_profiling = FALSE;
+	bc_prof_verbose = FALSE;
 
     return R_NilValue;
 }

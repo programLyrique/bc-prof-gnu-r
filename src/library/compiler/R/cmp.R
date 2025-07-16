@@ -3259,17 +3259,22 @@ disassemble <- function(code) {
 ## Experimental Utilities
 ##
 
-bcprof <- function(expr) {
-    .Internal(bcprofstart())
+bcprof <- function(expr, verbose=FALSE) {
+    .Internal(bcprofstart(verbose))
     tryCatch(expr,
              finally = .Internal(bcprofstop()))
     val <- structure(.Internal(bcprofcounts()),
                      names = Opcodes.names)
     hits <- sort(val[val > 0], decreasing = TRUE)
     pct <- round(100 * hits / sum(hits), 1)
-    cat("Nb static opcodes:", .Internal(count_opcodes()), "\n")
-    cat("Nb dynamic opcodes:", sum(val), "\n")
-    data.frame(hits = hits, pct = pct)
+    nb_static_opcodes <- .Internal(count_opcodes())
+    if(verbose) {
+        cat("Nb static opcodes:", nb_static_opcodes, "\n")
+        cat("Nb dynamic opcodes:", sum(val), "\n")
+    }
+    df <- data.frame(hits = hits, pct = pct)
+    attr(df, "nb_static_opcodes") <- nb_static_opcodes
+    df
 }
 
 asm <- function(e, gen, env = .GlobalEnv, options = NULL) {

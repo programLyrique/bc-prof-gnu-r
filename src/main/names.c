@@ -1004,7 +1004,7 @@ FUNTAB R_FunTab[] =
 {"La_library",	do_lapack,	1001,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 
 {"bcprofcounts",do_bcprofcounts,0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
-{"bcprofstart",	do_bcprofstart,	0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
+{"bcprofstart",	do_bcprofstart,	0,	11,	1,	{PP_FUNCALL, PREC_FN,	0}},
 {"count_opcodes", do_count_opcodes, 0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 {"bcprofstop",	do_bcprofstop,	0,	11,	0,	{PP_FUNCALL, PREC_FN,	0}},
 
